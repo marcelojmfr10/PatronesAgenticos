@@ -89,7 +89,7 @@ const withoutTools = async () => {
 // Tool #1 find courses
 const findCourses = tool({
   description:
-    "Buscar cursos en el catálogo de DevTalles, por texto," +
+    "Buscar cursos en el catálogo de DevTalles, por texto, " +
     "por título o por nivel. Utilízala siempre antes de responder " +
     "cualquier pregunta sobre cursos, precios, cantidad de alumnos",
   inputSchema: z.object({
@@ -97,7 +97,7 @@ const findCourses = tool({
       .string()
       .optional()
       .describe("Texto a buscar en el título del curso"),
-    level: z.enum(["basic", "intermediate", "advanced"]),
+    level: z.enum(["basic", "intermediate", "advanced"]).optional(),
   }),
   execute: async ({ text, level }) => {
     const filteredCourses = COURSE_CATALOG.filter((course) => {
@@ -115,11 +115,68 @@ const findCourses = tool({
   },
 });
 
+const calculateTotal = tool({
+  description:
+    "Calcula el precio total de una lista de cursos aplicando un descuento porcentual. " +
+    "Utilízala siempre para cualquier operación aritmética: no calcules mentalmente",
+  inputSchema: z.object({
+    ids: z
+      .array(z.string())
+      .describe('IDs de los cursos. ej: ["ts-01", "dkr-0523"]'),
+    discountPercent: z.number().min(0).max(100).default(0),
+  }),
+  execute: async ({ ids, discountPercent }) => {
+    const foundCourses = COURSE_CATALOG.filter((course) =>
+      ids.includes(course.id),
+    );
+    const notFound = ids.filter(
+      (id) => !COURSE_CATALOG.some((course) => course.id === id),
+    );
+
+    const subTotal = foundCourses.reduce(
+      (acc, course) => acc + course.priceUSD,
+      0,
+    );
+
+    const discount = subTotal * (discountPercent / 100);
+    return {
+      subtotal: Number(subTotal.toFixed(2)),
+      discount: Number(discount.toFixed(2)),
+      total: Number((subTotal - discount).toFixed(2)),
+      notFound,
+    };
+  },
+});
+
+const withTools = async () => {
+  const tracer = createTracer("con-herramientas");
+
+  const { text } = await generateText({
+    model,
+    prompt: QUESTION,
+    tools: { findCourses, calculateTotal },
+    // Circuit Breaker
+    stopWhen: stepCountIs(6),
+    instructions:
+      "Eres un asistente de catálogo de cursos de DevTalles. " +
+      "No inventes precios, duraciones ni nombres de cursos. " +
+      "Consúltalos siempre con las herramientas disponibles.",
+    onStepEnd: tracer.onStepFinish,
+  });
+
+  console.log("\n Respuesta: ", text.green);
+  console.log("\n Verificar los números contra el catálogo de cursos ");
+
+  return tracer.summary();
+};
+
 export async function toolUseMain() {
-  const resultA = await withoutTools();
+  //   const resultA = await withoutTools();
+  const resultB = await withTools();
 
   console.log("\n ===== Comparativa =====");
   console.table({
-    "Sin herramientas": resultA,
+    // "Sin herramientas": resultA,
+    "Con herramientas": resultB,
   });
 }
