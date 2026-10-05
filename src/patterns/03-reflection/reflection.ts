@@ -124,15 +124,44 @@ async function withoutReflection() {
 // B) REFLEXIÓN INGENUA — el modelo se pregunta "¿está bien?"
 // ---------------------------------------------------------------------------
 
-// TODO: Schema
+const naiveVerdictSchema = z.object({
+  isGoodEnough: z.boolean().describe("¿El texto está listo para entregar?"),
+  comment: z.string().describe("Comentario breve sobre la calidad"),
+});
 
 async function naiveReflection() {
   console.log("\n═══ B) REFLEXIÓN INGENUA (sin criterios) ═══\n".blue);
   const tracer = createTracer("naive-reflection");
 
-  // TODO:
+  const { text: draft } = await generateText({
+    model,
+    prompt: TASK,
+    onStepEnd: tracer.onStepFinish,
+  });
 
-  return { ...tracer.summary() }; // score
+  // auto evaluación: sin rúbrica, sin criterios, sin nada
+  const { output: verdict } = await generateText({
+    model,
+    output: Output.object({
+      schema: naiveVerdictSchema,
+    }),
+    prompt: `TEXTO: \n ${draft}`,
+    onStepEnd: tracer.onStepFinish,
+  });
+
+  console.log("Informe".blue);
+  console.log(
+    `Veredicto del modelo: ${verdict.isGoodEnough ? `Está listo` : `Necesita cambios`}`,
+  );
+  console.log(`    Comentario: ${verdict.comment}`);
+  console.log(`  REALIDAD: (auditoría programática)`.blue);
+  const score = printAudit(auditBriefing(draft));
+  console.log(
+    `\n Compara el veredicto del model con la auditoría.`.yellow +
+      `\n Esta brecha es la razón de ser la rúbrica.\n`,
+  );
+
+  return { ...tracer.summary(), score }; // score
 }
 
 // ---------------------------------------------------------------------------
@@ -156,13 +185,13 @@ async function reflectionWithRubric() {
 
 export async function reflectionMain() {
   const a = await withoutReflection();
-  //   const b = await naiveReflection();
+  const b = await naiveReflection();
   //   const c = await reflectionWithRubric();
 
   console.log("\n═══ COMPARATIVA ═══\n".blue);
   console.table({
     "Sin reflexión": a,
-    //     'Reflexión ingenua': b,
+    "Reflexión ingenua": b,
     //     'Reflexión con rúbrica': c,
   });
 
