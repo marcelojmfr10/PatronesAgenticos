@@ -160,9 +160,16 @@ async function updateAnnouncement(
   feedback: string, // feedback del gate
   tracer: ReturnType<typeof createTracer>,
 ) {
-  // TODO: implementar la función
+  const { text: newText } = await generateText({
+    model,
+    instructions: WRITER_INSTRUCTIONS,
+    prompt:
+      `ANUNCIO ACTUAL: \n---${text}----` + `\nPROBLEMA: \n${feedback} ---`,
+    // TODO: prevenir el degradado eventualmente
+    onStepEnd: tracer.onStepFinish,
+  });
 
-  return "";
+  return newText.trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -197,9 +204,39 @@ async function withChaining() {
   console.log("\n═══ B) CON CADENA ═══\n".blue);
   const tracer = createTracer("con-cadena");
 
-  // TODO: implementar la lógica
+  let announcement = await writeAnnouncement(tracer);
+  let retries = 0;
 
-  return { ...tracer.summary() }; // score, retries
+  console.log(`Borrador: ${announcement.length} caracteres.`.purple);
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const feedback = lengthGate(announcement);
+
+    if (!feedback) {
+      console.log(`Gate superado en el intento ${attempt}`);
+      break;
+    }
+
+    console.log(`${feedback}`.yellow);
+
+    announcement = await updateAnnouncement(announcement, feedback, tracer);
+    retries++;
+    console.log(`Intento ${attempt}: ${announcement.length} caracteres`);
+  }
+
+  // fallback determinista
+  if (lengthGate(announcement)) {
+    if (announcement.length > MAX_CHARS) {
+      announcement = `${announcement.slice(0, MAX_CHARS - 3)}...`;
+    }
+  }
+
+  console.log(`\n${announcement.green}`);
+  console.log(`\n Longitud final: ${announcement.length} caracteres`);
+  console.log(`\n Auditoría: `.blue);
+  const score = printAudit(auditAnnouncement(announcement));
+
+  return { ...tracer.summary(), retries, score };
 }
 
 // ---------------------------------------------------------------------------
