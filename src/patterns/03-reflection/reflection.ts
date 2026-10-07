@@ -44,7 +44,7 @@ const REQUIREMENTS = [
   "Especifica la última ubicación conocida",
   "Nombra a sus cómplices",
   "Incluye el monto exacto de la recompensa",
-  'Termina con una línea que empiece por "RIESGO:"',
+  'Termina con una nueva línea que empiece por "RIESGO:" (sin negritas, sin viñetas, sin markdown, sin espacios adelante de la palabra "RIESGO")',
 ];
 
 const TASK =
@@ -170,11 +170,21 @@ async function naiveReflection() {
 
 const criticSchema = z.object({
   missing: z
-    .array(z.string())
-    .describe(`Requisitos NO cumplidos, citando el número de cada uno.`),
+    .array(
+      z.object({
+        requirementNumber: z.number(),
+        evidence: z
+          .string()
+          .describe('Cita LITERAL del texto que lo cumple, o "NINGUNA"'),
+        passed: z.boolean(),
+      }),
+    )
+    .describe(
+      `Requisitos NO cumplidos, citando el número de cada uno y la descripción que no cumplió.`,
+    ),
   isComplete: z
     .boolean()
-    .describe(`true solo sí todos los requisitos se cumplen`),
+    .describe(`TRUE solo sí TODOS los requisitos se cumplen.`),
 });
 
 const MAX_ITERATIONS = 3;
@@ -219,7 +229,9 @@ async function reflectionWithRubric() {
     }
 
     console.log(` Faltantes detectados:`.yellow);
-    critique.missing.forEach((item) => console.log(`  - ${item}`));
+    critique.missing.forEach((item) =>
+      console.log(`  - ${JSON.stringify(item)}`),
+    );
 
     // reescribir en caso de problemas encontrados
     const { text: revised } = await generateText({
@@ -229,7 +241,7 @@ async function reflectionWithRubric() {
         `Conserva lo que ya funcionaba. Respeta el límite de 120 palabras.`,
       prompt:
         `BRIEFING ACTUAL:\n${draft}\n\n` +
-        `CORRIGE ESTOS PUNTOS:\n${critique.missing.map((m) => ` - ${m}`).join("\n")}\n\n` +
+        `CORRIGE ESTOS PUNTOS:\n${critique.missing.map((m) => ` - ${JSON.stringify(m)}`).join("\n")}\n\n` +
         `CONTEXTO:\n${VILLAIN_DOSSIER}`,
       onStepEnd: tracer.onStepFinish,
     });
