@@ -33,7 +33,7 @@ import { createTracer, model } from "../../helpers/index.js";
 // ---------------------------------------------------------------------------
 
 const MAX_CHARS = 280;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 4;
 
 const COURSE = {
   title: "Patrones de diseño agéntico: Respuestas efectivas a desafíos",
@@ -164,8 +164,10 @@ async function updateAnnouncement(
     model,
     instructions: WRITER_INSTRUCTIONS,
     prompt:
-      `ANUNCIO ACTUAL: \n---${text}----` + `\nPROBLEMA: \n${feedback} ---`,
-    // TODO: prevenir el degradado eventualmente
+      `ANUNCIO ACTUAL: \n---${text}----` +
+      `\nPROBLEMA: \n${feedback} ---` +
+      // prevenir el degradado eventualmente
+      `\n\nPrompt original: ${BRIEF}---`,
     onStepEnd: tracer.onStepFinish,
   });
 
@@ -244,13 +246,39 @@ async function withChaining() {
 // ---------------------------------------------------------------------------
 
 /** Tope de seguridad para el laboratorio. En el bucle "sin tope" real, no lo habría. */
-const SAFETY_LIMIT = 8;
+const SAFETY_LIMIT = 10;
 
 async function chainWithoutRetryLimit() {
   console.log("\n═══ C) RIESGO: BUCLE SIN TOPE ═══\n".blue);
   const tracer = createTracer("sin-tope");
 
-  // TODO: implementar la lógica
+  let announcement = await writeAnnouncement(tracer);
+  let retries = 0;
+  const history: number[] = [];
+
+  let pendingChecks = auditAnnouncement(announcement).filter(
+    (check) => !check.passed,
+  );
+
+  while (pendingChecks.length > 0 && retries < SAFETY_LIMIT) {
+    const feedback = pendingChecks.map((check) => check.label).join("\n");
+    history.push(pendingChecks.length);
+
+    console.log({ feedback: `Problemas: \n ${feedback}`.purple });
+
+    announcement = await updateAnnouncement(announcement, feedback, tracer);
+
+    retries++;
+    console.log(`Intento: ${retries} \n ${announcement} ---`);
+    pendingChecks = auditAnnouncement(announcement).filter(
+      (check) => !check.passed,
+    );
+  }
+
+  console.log(`\n Trayectoria: ${history.join("-->").yellow}`);
+  console.log(`Auditoría`.blue);
+  const score = printAudit(auditAnnouncement(announcement));
+  console.log(`Anuncio final\n`.blue, announcement.green);
 
   console.log(
     `\n\n
@@ -261,7 +289,7 @@ async function chainWithoutRetryLimit() {
       Todo bucle necesita un techo Y una salida determinista.`.yellow,
   );
 
-  return { ...tracer.summary() }; // score, retries, retries
+  return { ...tracer.summary(), score, retries };
 }
 
 // ---------------------------------------------------------------------------
@@ -269,15 +297,15 @@ async function chainWithoutRetryLimit() {
 // ---------------------------------------------------------------------------
 
 export async function promptChainingMain() {
-  const a = await withoutChaining();
+  // const a = await withoutChaining();
   // const b = await withChaining();
-  // const c = await chainWithoutRetryLimit();
+  const c = await chainWithoutRetryLimit();
 
   console.log("\n═══ COMPARATIVA ═══\n".blue);
   console.table({
-    "Sin cadena": a,
-    // 'Con cadena': b,
-    // 'Bucle sin tope': c,
+    // "Sin cadena": a,
+    // "Con cadena": b,
+    "Bucle sin tope": c,
   });
 
   console.log(
