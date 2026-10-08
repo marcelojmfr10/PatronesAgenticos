@@ -9,6 +9,7 @@ import { reflectionMain } from "./patterns/03-reflection/reflection.js";
 import { reActSimpleMain } from "./patterns/04-react/reAct-loop.js";
 import { reActWeatherMain } from "./patterns/04-react/reAct-tarea.js";
 import { promptChainingMain } from "./patterns/05-prompt-chaining/prompt-chaining.js";
+import { planAndExecuteMain } from "./patterns/06-plan-and-execute/plan-execute.js";
 
 console.clear();
 
@@ -20,4 +21,5 @@ console.clear();
 // await reflectionMain();
 // await reActSimpleMain();
 // await reActWeatherMain();
-await promptChainingMain();
+// await promptChainingMain();
+await planAndExecuteMain();
