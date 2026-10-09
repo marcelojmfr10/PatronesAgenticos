@@ -383,6 +383,7 @@ function deepFreeze<T>(value: T): T {
 
 function runInSandbox(code: string, timeoutMs = 1_000): SandboxResult {
   const logs: string[] = [];
+  //   console.log(code.purple);
 
   const sandbox = {
     db: deepFreeze({
@@ -487,7 +488,7 @@ async function withCodeAct() {
       "retorne exactamente este objeto:\n" +
       '{ assignments: { "<alias del héroe>": ["<alias villano>", ...] }, ' +
       'unhandled: ["<alias villano>", ...] }',
-    // tools: { runCode },
+    tools: { runCode },
     stopWhen: stepCountIs(6),
     instructions:
       "Eres el coordinador del operativo. Responde en español. " +
