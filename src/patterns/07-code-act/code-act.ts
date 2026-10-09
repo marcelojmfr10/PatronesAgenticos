@@ -430,7 +430,54 @@ async function withCodeAct() {
 
   let lastPlan: Plan | null = null;
 
-  // TODO: runCode Tool
+  const runCode = tool({
+    description:
+      "Ejecuta código JavaScript en un sandbox y devuelve lo que retornes. " +
+      "Dentro dispones de:\n" +
+      "  db.villains → [{ alias, counteredBy, threat }]\n" +
+      "  db.heroes   → [{ alias, specialty, availableHours }]\n" +
+      "  db.hoursPerOperation → number\n" +
+      "Usa `return` para devolver el resultado. Sin await, sin require, " +
+      "sin acceso a red ni a ficheros.",
+    inputSchema: z.object({
+      code: z
+        .string()
+        .describe("Código JavaScript. Debe de terminar con un return"),
+    }),
+    execute: async ({ code }) => {
+      const result = runInSandbox(extractCode(code));
+
+      if (!result.ok) {
+        return {
+          ok: false,
+          error: result.error,
+          logs: result.logs,
+          hint: `El código lanzó una excepción. Corrígelo y vuelve a ejecutar`,
+        };
+      }
+
+      const failed = auditPlan(result.value as Plan)
+        .filter((check) => !check.passed)
+        .map((check) => check.label);
+
+      if (failed.length === 0) {
+        lastPlan = result.value as Plan;
+      }
+
+      return {
+        ok: failed.length === 0,
+        logs: result.logs,
+        value: result.value,
+        failedChecks: failed,
+        hint: failed.length
+          ? `El plan NO es válido. Fallan: ${failed.join(" | ")}. ` +
+            `Inspecciona los datos reales antes de asumir nada: ` +
+            "haz un `return db.villains[0]` y mira qué campos trae. " +
+            "NO declares datos de prueba propios: db ya está cargado."
+          : "Plan válido.",
+      };
+    },
+  });
 
   await generateText({
     model,
@@ -509,13 +556,13 @@ const SANDBOX_PROBES = [
 // ---------------------------------------------------------------------------
 
 export async function codeActMain() {
-  const a = await withoutCodeAct();
-  // const b = await withCodeAct();
+  //   const a = await withoutCodeAct();
+  const b = await withCodeAct();
 
   console.log("\n═══ COMPARATIVA ═══\n".blue);
   console.table({
-    "Sin CodeAct (JSON)": a,
-    // 'Con CodeAct': b,
+    // "Sin CodeAct (JSON)": a,
+    "Con CodeAct": b,
   });
 
   console.log(
